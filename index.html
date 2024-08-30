@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, height=device-height, minimum-scale=1.0, maximum-scale=1.0">
+  <title>Ulike</title>
+  <style>
+    * {
+      padding: 0;
+      margin: 0;
+    }
+
+    html,
+    body,
+    .three-load {
+      height: 100%;
+    }
+
+    .three-box {
+      position: relative;
+    }
+
+    .three-box .tips-icon {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 25%;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9;
+      opacity: 0;
+      pointer-events: none;
+      transition: all .4s ease;
+    }
+
+    .three-box .tips-icon.show {
+      opacity: 1;
+      animation: spin-three 3.6s linear infinite;
+    }
+
+    .three-box .tips-icon .tip-img {
+      display: block;
+      margin: 0;
+    }
+
+    @keyframes spin-three {
+      0% {
+        opacity: 0;
+      }
+
+      25% {
+        opacity: 1;
+      }
+
+      75% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0;
+      }
+    }
+
+    .three-box .three-load {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      color: #000;
+      z-index: 10;
+      background: #eee;
+    }
+  </style>
+  <script>
+    var Shopify = {
+      theme: {
+        id: ''
+      }
+    }
+  </script>
+</head>
+
+<body>
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+
+    import { OrbitControls } from 'https://unpkg.com/three@0.127.0/examples/jsm/controls/OrbitControls.js';
+    import { GLTFLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
+    import { RoomEnvironment } from 'https://unpkg.com/three@0.127.0/examples/jsm/environments/RoomEnvironment.js';
+
+    let camera, scene, renderer, object, controls, model;
+    let modelLoaded = false; // 用于追踪模型加载状态
+    let isRotation = false; //转动
+    let rotationY = 0;
+    let rotationX = 0;
+    let isRight = 0;
+    let isTop = 0;
+    let num = 0.01;
+    let boxHeight = 0;
+    let boxWidth = 0;
+    function getQueryParam(paramName) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(paramName);
+    }
+    init()
+    animate();
+    function init() {
+      boxHeight = window.innerHeight;
+      boxWidth = window.innerWidth;
+      let div = document.createElement('div');
+      div.className = 'three-box';
+      div.style.width = boxWidth;
+      div.style.height = boxHeight;
+
+      let lDiv = document.createElement('div');
+      lDiv.className = 'three-load';
+
+      let sDiv = document.createElement('div');
+      sDiv.className = 'tips-icon';
+
+      let img = document.createElement('img');
+      img.src = 'https://cdn.shopify.com/s/files/1/0656/9079/6273/files/cu.svg';
+      img.className = 'tip-img';
+
+
+      sDiv.appendChild(img);
+      div.appendChild(sDiv);
+      div.appendChild(lDiv);
+
+      document.body.appendChild(div);
+
+      // 创建透视相机
+      camera = new THREE.PerspectiveCamera(
+        45, // 视角
+        boxWidth / boxHeight, // 长宽比
+        0.1, // 近裁剪面
+        100 // 远裁剪面
+      );
+      camera.position.set(0, 0, -25); // 设置相机位置
+
+      scene = new THREE.Scene(); // 创建场景
+
+      // 加载并添加3D模型
+      loadModel(getQueryParam('3dLink'), () => {
+        modelLoaded = true;
+        document.querySelector('.three-load').remove();
+        setTimeout(function () {
+          isRotation = true;
+          sDiv.classList.add('show');
+        }, 1000);
+      });
+
+      // 创建WebGL渲染器
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+      });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(boxWidth, boxHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping; // 色调映射
+      renderer.toneMappingExposure = 2.8; // 曝光度
+      div.appendChild(renderer.domElement);
+
+      // 创建环境和环境贴图
+      const environment = new RoomEnvironment(renderer);
+      const pmremGenerator = new THREE.PMREMGenerator(renderer);
+
+      scene.background = new THREE.Color(0xf9f9f9); // 设置场景背景颜色
+      scene.environment = pmremGenerator.fromScene(environment).texture; // 设置环境贴图
+
+      // 创建交互控制器
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true; // 启用阻尼
+      controls.minDistance = 15; // 最小距离
+      controls.maxDistance = 100; // 最大距离
+      controls.enablePan = false;
+      controls.target.set(0, 0.35, 0); // 控制器焦点位置
+      controls.update();
+
+      renderer.domElement.addEventListener('mousedown', function (event) {
+        isRotation = false;
+        document.querySelector('.tips-icon').classList.remove('show');
+        isRight = 0;
+        isTop = 0;
+        num = 0.01;
+      });
+
+      // 响应窗口大小变化
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    // 窗口大小变化处理函数
+    function onWindowResize() {
+      boxHeight = window.innerHeight;
+      boxWidth = window.innerWidth;
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onProgress(xhr) {
+      if (xhr.lengthComputable) {
+        const percentComplete = (xhr.loaded / xhr.total) * 100;
+        document.querySelector('.three-load').innerHTML = 'Loading, please wait… ' + percentComplete.toFixed(2) + '%';
+      }
+    }
+
+    // 加载模型
+    function loadModel(modelPath, callback) {
+      new GLTFLoader().load(
+        modelPath,
+        (gltf) => {
+          model = gltf.scene;
+          scene.add(model);
+          if (callback) {
+            callback();
+          }
+        },
+        onProgress
+      );
+    }
+    // 清空场景重新加载模型
+    function reloadModel(modelPath, callback) {
+      if (scene) {
+        clearThree(scene);
+      }
+
+      loadModel(modelPath, () => {
+        if (callback) {
+          callback();
+        }
+        renderer.render(scene, camera);
+      });
+    }
+
+    function clearThree(obj) {
+      while (obj.children.length > 0) {
+        clearThree(obj.children[0]);
+        obj.remove(obj.children[0]);
+      }
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        Object.keys(obj.material).forEach((prop) => {
+          if (!obj.material[prop]) return;
+          if (typeof obj.material[prop].dispose === 'function') obj.material[prop].dispose();
+        });
+        obj.material.dispose();
+      }
+    }
+
+    // 动画循环函数
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (isRotation) {
+        if (isRight == 0) {
+          rotationY += num;
+          if (rotationY >= 0.5) {
+            isRight = 1;
+          }
+        } else {
+          if (isRight != 2) {
+            if (isRight == 1) {
+              num = -0.01;
+            }
+            rotationY += num;
+            if (rotationY <= -0.5) {
+              num = 0.01;
+              isRight = 3;
+            }
+            if (rotationY >= 0 && num == 0.01) {
+              rotationY = 0;
+              isRight = 2;
+            }
+          }
+        }
+        if (isRight == 2) {
+          if (isTop == 0) {
+            rotationX += num;
+            if (rotationX >= 0.3) {
+              isTop = 1;
+            }
+          } else {
+            if (isTop != 2) {
+              if (isTop == 1) {
+                num = -0.01;
+              }
+              rotationX += num;
+              if (rotationX <= -0.3) {
+                num = 0.01;
+                isTop = 3;
+              }
+              if (rotationX >= 0 && num == 0.01) {
+                rotationX = 0;
+                isTop = 2;
+                isRotation = false;
+                document.querySelector('.tips-icon').classList.remove('show');
+              }
+            }
+          }
+        }
+      }
+      if (model) {
+        model.rotation.y = rotationY;
+        model.rotation.x = rotationX;
+      }
+
+      controls.update(); // 如果启用阻尼，需要更新控制器
+
+      render();
+    }
+
+    // 渲染函数
+    function render() {
+      if (modelLoaded) {
+        // 仅在模型加载完成后才渲染
+        renderer.render(scene, camera);
+      }
+    }
+  </script>
+</body>
+
+</html>
